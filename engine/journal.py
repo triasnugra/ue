@@ -3,6 +3,7 @@ import hashlib, json, os, re
 def load(path):
     return [json.loads(l) for l in open(path) if l.strip()] if os.path.exists(path) else []
 def append(path, setup):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     rows = load(path); prev = rows[-1]["h"] if rows else "GENESIS"; setup = {**setup, "seq": len(rows) + 1, "prev": prev}
     setup["id"] = f"{setup['decision_ms']}|{setup['symbol']}|{setup['side']}"
     if any(r["id"] == setup["id"] for r in rows): return None                    # idempoten

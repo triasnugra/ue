@@ -5,7 +5,11 @@ import pandas as pd
 _EX = {}
 def ex(name):
     import ccxt
-    if name not in _EX: _EX[name] = getattr(ccxt, name)({"enableRateLimit": True, "timeout": 20000})
+    if name not in _EX:
+        e = getattr(ccxt, name)({"enableRateLimit": True, "timeout": 20000, "options": {"fetchCurrencies": False}})
+        if name == "binance":   # endpoint data publik yang tidak diblokir untuk IP runner (dipakai benchmark sebelumnya)
+            e.urls["api"] = {**e.urls["api"], "public": "https://data-api.binance.vision/api/v3", "private": "https://data-api.binance.vision/api/v3"}
+        _EX[name] = e
     return _EX[name]
 def universe(cfg):
     """Semua pair spot aktif quote USDT dari tiap exchange, digabung per base; sumber = exchange dengan volume terbesar."""
@@ -17,8 +21,9 @@ def universe(cfg):
             print(f"[universe] {name} gagal: {err}"); continue
         for sym, m in mk.items():
             if not (m.get("spot") and m.get("active", True) and m.get("quote") == cfg["quote"] and m.get("base")) or rx.search(sym): continue
-            qv = (tk.get(sym) or {}).get("quoteVolume") or 0
+            t = tk.get(sym) or {}; qv = t.get("quoteVolume") or ((t.get("baseVolume") or 0) * (t.get("last") or 0))
             if qv >= cfg["min_quote_volume_usd"] and qv > best.get(m["base"], (0,))[0]: best[m["base"]] = (qv, name, sym)
+    if not best: raise RuntimeError("Universe kosong: semua exchange gagal/diblokir dari lokasi runner. Ubah 'exchanges' di config.json.")
     rows = sorted(((b, v[1], v[2], v[0]) for b, v in best.items()), key=lambda r: -r[3])
     return rows[: cfg["max_symbols"]] if cfg.get("max_symbols") else rows
 def ohlcv(base, prefer, cfg, tf=None, limit=400, since=None):
