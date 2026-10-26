@@ -1,1 +1,1 @@
-{"meta": {"universe": 200, "candidates": 0, "published": 0, "rejected": {"ENTRY_TOO_FAR": 1}, "last_scan_utc": "2026-10-25T15:10:02+00:00"}, "stats": {"published": 0, "resolved": 0, "tp": 0, "sl": 0, "expired": 0, "win_rate": null, "expectancy_R_net": null, "chain_ok": true, "note": "Angka tidak sah sebelum >=150 trade dan >=20 minggu (protokol)."}, "setups": []}
+{"meta":{},"stats":{"published":0,"resolved":0,"tp":0,"sl":0,"expired":0,"win_rate":null,"expectancy_R_net":null,"chain_ok":true,"note":"Belum ada data."},"setups":[]}
