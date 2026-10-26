@@ -7,19 +7,21 @@ def now(): return int(time.time() * 1000)
 def scan(meta):
     rows = data.universe(CFG); print(f"[scan] universe {len(rows)} koin; teratas: {[(r[0], r[1], round(r[3]/1e6)) for r in rows[:5]]}"); allc = data.fetch_all(rows, CFG); src = {r[0]: r[1] for r in rows}
     held = [s for s in journal.load(J) if json.load(open(RES)).get(s["id"], {}).get("status", "PENDING") in ("PENDING", "IN_TRADE")] if os.path.exists(RES) else []
-    cands, rej = [], {}
+    cands, rej, coins, watch = [], {}, [], []
     for base, df in allc.items():
-        if df is None: continue
+        if df is None: rej["NO_DATA"] = rej.get("NO_DATA", 0) + 1; continue
         si = signals.scan_input(df, now())
-        if not si: continue
-        x, px, dms, qv = si; f = signals.features(x, px, CFG)
-        if not f: continue
-        since = data.ohlcv(base, src[base], CFG, tf="1h", limit=48, since=dms)
-        s, why = plan.build(base, src[base], f, px, dms, qv, since, CFG)
-        if s: cands.append(s)
-        else: rej[why] = rej.get(why, 0) + 1
+        if not si: rej["NO_OPEN_CANDLE"] = rej.get("NO_OPEN_CANDLE", 0) + 1; continue
+        x, px, dms, qv = si; f, ctx = signals.features(x, px, CFG); st = ctx["why"]
+        if f:
+            since = data.ohlcv(base, src[base], CFG, tf="1h", limit=48, since=dms)
+            s, st = plan.build(base, src[base], f, px, dms, qv, since, CFG)
+            if s: cands.append(s); st = "SETUP"
+            elif st == "ENTRY_TOO_FAR": watch.append(dict(symbol=base, side="LONG" if f["side"] == 1 else "SHORT", level=f["lvl"], px=px, dist_atr=abs(px - f["lvl"]) / f["atr"], why=f["why"], conf=f["conf"]))
+        rej[st] = rej.get(st, 0) + 1
+        coins.append(dict(symbol=base, px=px, tr=ctx.get("tr"), pos=ctx.get("pos"), state=st, qv=qv))
     new = [journal.append(J, s) for s in plan.portfolio_filter(cands, held, CFG)]
-    meta.update(universe=len(rows), candidates=len(cands), published=sum(1 for n in new if n), rejected=rej, last_scan_utc=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
+    watch.sort(key=lambda w: w["dist_atr"]); meta.update(coins=sorted(coins, key=lambda c: -c["qv"]), watchlist=watch[:40], funnel=rej, universe=len(rows), candidates=len(cands), published=sum(1 for n in new if n), rejected=rej, last_scan_utc=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
 def evaluate_all(meta):
     res = json.load(open(RES)) if os.path.exists(RES) else {}; byb = {}
     for s in journal.load(J):
