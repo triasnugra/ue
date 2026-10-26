@@ -18,7 +18,7 @@ def scan_input(df, now_ms):
     return closed.iloc[-999:].reset_index(drop=True), float(f.o), int(f.t), float(last.v * last.c)
 def features(x, px, cfg):
     n = len(x)
-    if n < 120: return None
+    if n < 120: return None, {"why": "DATA_SHORT"}
     c = x.c; td = sgn(px, c.ewm(span=20, adjust=False).mean().iloc[-1], c.ewm(span=50, adjust=False).mean().iloc[-1]); tr = td
     w = x.set_index(pd.to_datetime(x.t, unit="ms")).c.resample("W-SUN").last().iloc[:-1]
     if len(w) >= 55: tr = sgn(px, w.ewm(span=20, adjust=False).mean().iloc[-1], w.ewm(span=50, adjust=False).mean().iloc[-1])
@@ -48,8 +48,12 @@ def features(x, px, cfg):
     SS = [(t, v, w_) for t, v, w_, ok in [("dd", Zh, "Double Deviation atas", ddDn), ("dev", H, "Deviasi atas gagal bertahan", devDn), ("mon", monH, "Sweep Monday High", mDn), ("zone", H-bd, "Retest supply kuat", zDn), ("bo", L, "Breakdown-retest", boDn), ("fib", f75, "Fib 0.75 tren turun", tr == -1 and nf)] if ok]
     side, S = (1, LS) if LS and (not SS or len(LS) > len(SS)) else (-1, SS) if SS else (0, [])
     rev = {1: (devUp, mUp, ddUp), -1: (devDn, mDn, ddDn)}
-    if flat or not side or (tr == -side and not any(rev[side])) or (mid and not any(rev[side])): return None
+    ctx = dict(tr=int(tr), pos=float(pos), atr=atr, H=float(H), L=float(L))
+    if flat: return None, {**ctx, "why": "FLAT"}
+    if not side: return None, {**ctx, "why": "NO_TRIGGER"}
+    if tr == -side and not any(rev[side]): return None, {**ctx, "why": "COUNTER_TREND", "side": side}
+    if mid and not any(rev[side]): return None, {**ctx, "why": "MID_RANGE"}
     conf = int(rev[side][0] or rev[side][2]) + int(dR == side) + int(dO == side) + int(tr == side) + int(rev[side][1])
-    if conf < cfg["guards"]["min_confirmations"] or (len(S) == 1 and S[0][0] == "mon" and not (dR == side or dO == side)): return None
+    if conf < cfg["guards"]["min_confirmations"] or (len(S) == 1 and S[0][0] == "mon" and not (dR == side or dO == side)): return None, {**ctx, "why": "LOW_CONFIRMATION", "side": side}
     trig, lvl, why = sorted(S, key=lambda s: ["dd", "dev", "mon", "zone", "bo", "fib"].index(s[0]))[0]
-    return dict(side=side, trig=trig, lvl=float(lvl), why=why, atr=atr, tr=int(tr), conf=conf, pos=float(pos))
+    return dict(side=side, trig=trig, lvl=float(lvl), why=why, atr=atr, tr=int(tr), conf=conf, pos=float(pos)), {**ctx, "why": "SETUP"}
